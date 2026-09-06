@@ -1,5 +1,5 @@
 {
-  "name": "vid2md",
+  "name": "watch2text",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
     "next": "^15.4.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "undici": "^8.10.0",
     "youtubei.js": "^18.0.0"
   },
   "devDependencies": {

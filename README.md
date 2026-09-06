@@ -1,41 +1,92 @@
-# vid2md
+# Watch2Text
 
-Paste a video URL, get a clean Markdown file for Obsidian/Logseq/AI ingestion. See `SPEC.md` for scope and product strategy.
+Turn any YouTube video into clean, readable Markdown: real paragraphs, YAML frontmatter, and timestamp links back to the exact moment in the video. Built for note-takers, researchers, and anyone feeding video content to AI tools.
 
-## Status (scaffold, built Aug 17)
+**Live:** https://www.watch2text.com (the hosted version is in private beta, see [Why the hosted version is gated](#why-the-hosted-version-is-gated))
 
-Lane 1 (caption extraction → cleaned markdown) is **working end to end and tested** against real videos, including a 20-minute TED talk (427 segments → 3,200-word clean markdown with timestamp links). Lane 2 (Whisper) is stubbed at the API level (`no_captions` response) and is Day 3 work.
+![Watch2Text turning a 20-minute TED talk into a 3,234-word Markdown document](docs/screenshot.png)
 
-## Run it
+## What it does
+
+Paste a URL. Get back a `.md` file that looks like this:
+
+```markdown
+---
+title: "Do schools kill creativity? | Sir Ken Robinson | TED"
+source: https://www.youtube.com/watch?v=iG9CE55wbtY
+channel: "TED"
+duration_minutes: 20
+captured: 2026-09-05
+tags: [video-notes, transcript]
+---
+
+# Do schools kill creativity? | Sir Ken Robinson | TED
+
+[0:27](https://www.youtube.com/watch?v=iG9CE55wbtY&t=27s) Good morning. How are you? It's been great, hasn't it? I've been blown away by the whole thing...
+```
+
+Every paragraph carries a link to the second it starts, so the document doubles as an index into the video.
+
+## Why this exists
+
+Video is a terrible reference format. You can't skim it, search it, or paste it into your notes. Captions already contain the text, but raw captions arrive as unpunctuated fragments full of `[Music]` cues, duplicated lines, and HTML entities. The cleaning pipeline is the actual product; the transcription part is the easy 20%.
+
+## How it works
+
+Two lanes by design:
+
+- **Lane 1 (free, instant):** most YouTube videos have captions, creator-uploaded or auto-generated. We fetch them and run the cleaning pipeline. Zero marginal cost, so it's free forever.
+- **Lane 2 (planned):** no captions? Whisper transcription of the audio, with a bring-your-own-API-key option so the "no lock-in" promise applies to the paid lane too.
+
+### The cleaning pipeline (`lib/markdown.ts`)
+
+1. Strip bracketed cues (`[Music]`, `[Applause]`) and decode HTML entities
+2. De-duplicate overlapping fragments (auto-captions repeat themselves constantly)
+3. Rebuild paragraphs using the timing gaps between caption segments, with a soft length cap so nothing becomes a wall of text
+4. Emit YAML frontmatter, a header block, and one timestamp link per paragraph
+5. Produce a filename that survives Obsidian, Windows, and macOS
+
+Tested against a batch of real videos: a 20-minute talk (427 caption segments) comes out as ~3,200 words in 24 paragraphs with zero leftover artifacts.
+
+### Fetching captions (`lib/transcript.ts`)
+
+Uses [youtubei.js](https://github.com/LuanRT/YouTube.js) with two deliberate choices, both learned the hard way:
+
+- `getBasicInfo` with the **ANDROID client**, because the full watch-page parser is brittle against markup changes and the WEB client returns `UNPLAYABLE` from datacenter IPs
+- The caption URL's `fmt` parameter must be **replaced** with `json3` (via `URL.searchParams.set`), not appended, or you get XML back
+
+## Why the hosted version is gated
+
+YouTube serves empty responses to requests from datacenter IP ranges (Vercel, AWS, and also free proxy providers, which are datacenter IPs too). Your home connection is fine; a server is not. The app detects this (`blocked` flag) and shows an honest "private beta" message instead of a misleading "no captions" error.
+
+The fix is a residential proxy (`PROXY_URL`), which costs money. Rather than spend ahead of demand, the hosted site collects a waitlist. **Running locally, everything works with no proxy at all.** The proxy layer (`lib/proxyFetch.ts`) has an 8-second fail-fast timeout with fallback to direct fetch, so a dead proxy can never hang a request.
+
+## Run it locally
 
 ```bash
 npm install
-npm run dev          # http://localhost:3000
+npm run dev
+# open http://localhost:3000
 ```
 
-Pipeline test without the UI:
+Batch quality check across many videos (writes each `.md` to `test-output/` and prints an artifact report):
 
 ```bash
-npx tsx scripts/e2e-test.ts "https://www.youtube.com/watch?v=iG9CE55wbtY"
+npx tsx scripts/batch-test.ts urls.txt      # one URL per line
 ```
 
-## Architecture
+## Stack
 
-- `lib/transcript.ts` — fetches metadata + caption tracks via youtubei.js. **Read the comment block in `fetchTranscript` before touching it**: it deliberately uses `getBasicInfo` with the ANDROID client (the WEB client returns UNPLAYABLE from datacenter IPs, and the full watch-page parser is brittle), and the caption URL's `fmt` param must be replaced with `json3`, not appended.
-- `lib/markdown.ts` — the cleaning pipeline (cue stripping, dedupe, paragraph rebuilding on time gaps, YAML frontmatter, Obsidian-safe filenames). This is the product; invest polish here.
-- `app/api/transcribe/route.ts` — POST `{url}` → `{markdown, filename, meta, stats}`. Returns `422 no_captions` for caption-less videos (the Lane 2 upsell moment).
-- `app/page.tsx` — landing page + live demo UI with copy/download.
+Next.js 15 (App Router), TypeScript, youtubei.js, undici (proxy dispatcher), Supabase (waitlist storage via insert-only RLS). Deployed on Vercel.
 
-## Deployment note (important)
+## Roadmap
 
-YouTube throttles/blocks some datacenter IP ranges. The ANDROID-client path worked from a cloud sandbox in testing, but if Vercel's IPs get blocked in production, the fixes in order of effort: (1) route transcript fetches through a small proxy, (2) use youtubei.js session with po_token, (3) move just the fetch step to a worker with a residential egress. Don't solve this before it's actually a problem; test on Vercel first.
+- [ ] `npx watch2text <url>` CLI that writes straight into a notes folder
+- [ ] Article-to-Markdown lane (same output format, web pages instead of video)
+- [ ] Whisper lane for caption-less videos, BYO key
+- [ ] Playlists and batch export
+- [ ] Residential proxy for the hosted version, once the waitlist justifies it
 
-## Day 3 (Lane 2) plan
+## License
 
-- No captions → extract audio, transcribe with a hosted Whisper API to ship fast
-- BYO-API-key option (free) alongside hosted transcription (the paywall)
-- Supabase auth + free/paid gate (3 free Whisper jobs), email capture for paid tier
-
-## Day 4 plan
-
-Name + domain, PostHog, polish landing copy, three-tier pricing preview.
+MIT

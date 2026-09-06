@@ -1,4 +1,4 @@
-# vid2md — Spec (v1)
+# Watch2Text — Spec (v1)
 
 **Promise:** Paste a video URL, get a clean Markdown file built for your second brain (Obsidian, Logseq, AI ingestion). No proprietary service, no lock-in.
 

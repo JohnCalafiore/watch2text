@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "build:cli": "esbuild bin/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/watch2text.mjs --external:youtubei.js --external:undici --banner:js=\"#!/usr/bin/env node\"",
+    "prepare": "npm run build:cli",
+    "prepublishOnly": "npm run build:cli"
   },
   "dependencies": {
     "next": "^15.4.6",
@@ -17,7 +20,33 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.12",
     "typescript": "^5"
+  },
+  "bin": {
+    "watch2text": "dist/watch2text.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "Turn any YouTube video into clean, readable Markdown with timestamp links.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JohnCalafiore/watch2text.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "youtube",
+    "transcript",
+    "markdown",
+    "obsidian",
+    "captions",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
   }
 }

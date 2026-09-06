@@ -19,14 +19,16 @@
  * instances, so we unwrap them into (url, init) form before forwarding.
  */
 
+import { fetch as ufetch, ProxyAgent } from "undici";
+
 const proxyUrl = process.env.PROXY_URL;
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS ?? 8000);
 
 let impl: (input: any, init?: any) => Promise<any> = fetch as any;
 
 if (proxyUrl) {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { fetch: ufetch, ProxyAgent } = require("undici");
+  // Static import (not require) so this module works in both the Next.js
+  // server bundle and the ESM CLI bundle.
   const dispatcher = new ProxyAgent(proxyUrl);
 
   /** Normalize a Request object (possibly foreign) into (url, init). */

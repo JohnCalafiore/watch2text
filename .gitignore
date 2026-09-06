@@ -8,3 +8,4 @@ urls.txt
 .vercel
 *.log
 .DS_Store
+dist/

@@ -61,7 +61,34 @@ YouTube serves empty responses to requests from datacenter IP ranges (Vercel, AW
 
 The fix is a residential proxy (`PROXY_URL`), which costs money. Rather than spend ahead of demand, the hosted site collects a waitlist. **Running locally, everything works with no proxy at all.** The proxy layer (`lib/proxyFetch.ts`) has an 8-second fail-fast timeout with fallback to direct fetch, so a dead proxy can never hang a request.
 
-## Run it locally
+## Use it as a command (recommended)
+
+The fastest way to use Watch2Text is from the terminal: no server, no browser, the file lands straight in your notes folder.
+
+```bash
+git clone https://github.com/JohnCalafiore/watch2text.git
+cd watch2text
+npm install          # also builds the CLI
+npm link             # makes `watch2text` available everywhere
+
+watch2text --set-out ~/Notes/Videos            # remember your notes folder, once
+watch2text https://www.youtube.com/watch?v=iG9CE55wbtY
+# wrote ~/Notes/Videos/Do schools kill creativity Sir Ken Robinson TED.md  (3,234 words)
+```
+
+More:
+
+```bash
+watch2text <url> <url> <url>            # several at once
+watch2text --file urls.txt              # one URL per line
+watch2text --out ./somewhere <url>      # one-off folder
+watch2text --no-timestamps <url>        # plain paragraphs
+watch2text --stdout <url> | pbcopy      # straight to the clipboard (macOS)
+```
+
+Output folder resolution: `--out`, then `$WATCH2TEXT_DIR`, then `~/.watch2textrc`, then the current directory. Because it runs on your machine, no proxy is needed.
+
+## Run the web app locally
 
 ```bash
 npm install
@@ -77,11 +104,11 @@ npx tsx scripts/batch-test.ts urls.txt      # one URL per line
 
 ## Stack
 
-Next.js 15 (App Router), TypeScript, youtubei.js, undici (proxy dispatcher), Supabase (waitlist storage via insert-only RLS). Deployed on Vercel.
+Next.js 15 (App Router), TypeScript, youtubei.js, undici (proxy dispatcher), Supabase (waitlist storage via insert-only RLS), esbuild (CLI bundle). Deployed on Vercel.
 
 ## Roadmap
 
-- [ ] `npx watch2text <url>` CLI that writes straight into a notes folder
+- [x] `watch2text <url>` CLI that writes straight into a notes folder (npm publish pending)
 - [ ] Article-to-Markdown lane (same output format, web pages instead of video)
 - [ ] Whisper lane for caption-less videos, BYO key
 - [ ] Playlists and batch export

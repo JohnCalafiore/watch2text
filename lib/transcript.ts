@@ -22,7 +22,7 @@ export interface TranscriptResult {
   meta: VideoMeta;
   segments: TranscriptSegment[];
   /** "manual" = human-written captions, "auto" = ASR, "none" = Lane 2 (Whisper) territory */
-  captionSource: "manual" | "auto" | "none";
+  captionSource: "manual" | "auto" | "whisper" | "none";
   captionLanguage?: string;
   /**
    * true when YouTube returned an empty shell (no title, no duration), which

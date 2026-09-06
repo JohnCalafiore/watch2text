@@ -1,6 +1,6 @@
 # Watch2Text
 
-Turn any YouTube video into clean, readable Markdown: real paragraphs, YAML frontmatter, and timestamp links back to the exact moment in the video. Built for note-takers, researchers, and anyone feeding video content to AI tools.
+Turn any YouTube video, or any web article, into clean, readable Markdown: real paragraphs, YAML frontmatter, and (for video) timestamp links back to the exact moment. Built for note-takers, researchers, and anyone feeding content to AI tools. Runs on your machine.
 
 **Live:** https://www.watch2text.com (the hosted version is in private beta, see [Why the hosted version is gated](#why-the-hosted-version-is-gated))
 
@@ -33,10 +33,11 @@ Video is a terrible reference format. You can't skim it, search it, or paste it 
 
 ## How it works
 
-Two lanes by design:
+Three lanes, picked automatically from the URL:
 
-- **Lane 1 (free, instant):** most YouTube videos have captions, creator-uploaded or auto-generated. We fetch them and run the cleaning pipeline. Zero marginal cost, so it's free forever.
-- **Lane 2 (planned):** no captions? Whisper transcription of the audio, with a bring-your-own-API-key option so the "no lock-in" promise applies to the paid lane too.
+- **Captions (free, instant):** most YouTube videos have captions, creator-uploaded or auto-generated. We fetch them and run the cleaning pipeline. Zero marginal cost.
+- **Whisper (your own key):** no captions? [yt-dlp](https://github.com/yt-dlp/yt-dlp) downloads the smallest audio track and OpenAI's `whisper-1` transcribes it with timestamps, then the same cleaner runs. About $0.006 per minute of audio, billed to your key, never through us.
+- **Articles:** any other web address goes through Readability (main content only, no nav or ads) and Turndown (HTML to Markdown), with the same frontmatter shape.
 
 ### The cleaning pipeline (`lib/markdown.ts`)
 
@@ -55,7 +56,7 @@ Uses [youtubei.js](https://github.com/LuanRT/YouTube.js) with two deliberate cho
 - `getBasicInfo` with the **ANDROID client**, because the full watch-page parser is brittle against markup changes and the WEB client returns `UNPLAYABLE` from datacenter IPs
 - The caption URL's `fmt` parameter must be **replaced** with `json3` (via `URL.searchParams.set`), not appended, or you get XML back
 
-## Why the hosted version is gated
+## Why the hosted version is gated (videos only)
 
 YouTube serves empty responses to requests from datacenter IP ranges (Vercel, AWS, and also free proxy providers, which are datacenter IPs too). Your home connection is fine; a server is not. The app detects this (`blocked` flag) and shows an honest "private beta" message instead of a misleading "no captions" error.
 
@@ -79,7 +80,8 @@ watch2text https://www.youtube.com/watch?v=iG9CE55wbtY
 More:
 
 ```bash
-watch2text <url> <url> <url>            # several at once
+watch2text <url> <url> <url>            # several at once, videos and articles mixed
+watch2text https://paulgraham.com/greatwork.html   # any article
 watch2text --file urls.txt              # one URL per line
 watch2text --out ./somewhere <url>      # one-off folder
 watch2text --no-timestamps <url>        # plain paragraphs
@@ -87,6 +89,21 @@ watch2text --stdout <url> | pbcopy      # straight to the clipboard (macOS)
 ```
 
 Output folder resolution: `--out`, then `$WATCH2TEXT_DIR`, then `~/.watch2textrc`, then the current directory. Because it runs on your machine, no proxy is needed.
+
+### Videos without captions (Whisper)
+
+One-time setup:
+
+```bash
+winget install yt-dlp        # Windows   (macOS: brew install yt-dlp, or: pip install yt-dlp)
+watch2text --set-key sk-...  # your OpenAI API key, stored in ~/.watch2textrc readable only by you
+```
+
+After that, caption-less videos are transcribed automatically; the output line says `whisper` instead of `manual` or `auto`. Current limit is OpenAI's 25 MB upload, roughly 60 to 90 minutes of audio at the low bitrate we request. `$OPENAI_API_KEY` in the environment works too.
+
+### Prefer a window to a terminal?
+
+Double-click **`Start Watch2Text.cmd`** in the project folder. It builds the app the first time (about a minute), then opens the web version at `http://localhost:3005`. Make a desktop shortcut to it. For Whisper in the web version, copy `.env.local.example` to `.env.local` and add your key.
 
 ## Run the web app locally
 
@@ -104,13 +121,14 @@ npx tsx scripts/batch-test.ts urls.txt      # one URL per line
 
 ## Stack
 
-Next.js 15 (App Router), TypeScript, youtubei.js, undici (proxy dispatcher), Supabase (waitlist storage via insert-only RLS), esbuild (CLI bundle). Deployed on Vercel.
+Next.js 15 (App Router), TypeScript, youtubei.js, undici (proxy dispatcher), @mozilla/readability + linkedom + turndown (article lane), yt-dlp + OpenAI whisper-1 (Whisper lane), Supabase (waitlist storage via insert-only RLS), esbuild (CLI bundle). Deployed on Vercel.
 
 ## Roadmap
 
 - [x] `watch2text <url>` CLI that writes straight into a notes folder (npm publish pending)
-- [ ] Article-to-Markdown lane (same output format, web pages instead of video)
-- [ ] Whisper lane for caption-less videos, BYO key
+- [x] Article-to-Markdown lane (same output format, web pages instead of video)
+- [x] Whisper lane for caption-less videos, BYO key (via yt-dlp)
+- [ ] Long-video chunking past OpenAI's 25 MB limit
 - [ ] Playlists and batch export
 - [ ] Residential proxy for the hosted version, once the waitlist justifies it
 

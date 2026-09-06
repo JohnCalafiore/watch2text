@@ -121,7 +121,7 @@ export default function Home() {
           <input
             type="url"
             required
-            placeholder="https://www.youtube.com/watch?v=..."
+            placeholder="YouTube URL or any article link"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />
@@ -168,7 +168,7 @@ export default function Home() {
         <div className="card">
           <span className="step">01</span>
           <h3>Paste a link</h3>
-          <p>Any YouTube video with captions works instantly, free.</p>
+          <p>A YouTube video, or any web article. Captioned videos are instant and free.</p>
         </div>
         <div className="card">
           <span className="step">02</span>

@@ -1,40 +1,52 @@
 /**
  * watch2text CLI
  *
- *   watch2text <url> [<url> ...]        transcribe one or more videos
+ *   watch2text <url> [<url> ...]        YouTube videos OR web articles, mixed freely
  *   watch2text --file urls.txt          one URL per line
  *   watch2text --out <dir> <url>        write here instead of the default folder
  *   watch2text --set-out <dir>          remember a default output folder
+ *   watch2text --set-key <openai-key>   remember an OpenAI key for caption-less videos
  *   watch2text --stdout <url>           print the markdown instead of writing a file
  *   watch2text --no-timestamps <url>    plain paragraphs, no timestamp links
  *
- * Output folder resolution: --out, then WATCH2TEXT_DIR, then ~/.watch2textrc, then cwd.
- * Runs entirely on your machine, so no proxy is needed: your home IP is fine.
+ * Lanes: YouTube captions (free) -> Whisper via yt-dlp + your OpenAI key (if no
+ * captions and a key is set) -> web article extraction for any other http(s) URL.
+ * Everything runs on your machine.
  */
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { extractVideoId, fetchTranscript } from "../lib/transcript";
 import { buildMarkdown, suggestFilename } from "../lib/markdown";
+import { fetchArticle, isWebUrl } from "../lib/article";
+import { whisperSegments } from "../lib/whisper";
 
 const RC_PATH = join(homedir(), ".watch2textrc");
 
-function readRc(): { out?: string } {
+interface Rc { out?: string; openaiKey?: string; ytdlpPath?: string }
+function readRc(): Rc {
   try { return JSON.parse(readFileSync(RC_PATH, "utf8")); } catch { return {}; }
+}
+function writeRc(patch: Rc) {
+  const next = { ...readRc(), ...patch };
+  writeFileSync(RC_PATH, JSON.stringify(next, null, 2));
+  try { chmodSync(RC_PATH, 0o600); } catch { /* Windows: ignore */ }
 }
 
 function usage(code = 0): never {
-  console.log(`watch2text: turn a YouTube video into clean Markdown
+  console.log(`watch2text: turn videos and articles into clean Markdown
 
 Usage:
-  watch2text <url> [<url> ...]
-  watch2text --file urls.txt
-  watch2text --out <dir> <url>
-  watch2text --set-out <dir>
-  watch2text --stdout <url>
-  watch2text --no-timestamps <url>
+  watch2text <url> [<url> ...]        YouTube videos or web articles
+  watch2text --file urls.txt          one URL per line
+  watch2text --out <dir> <url>        one-off output folder
+  watch2text --set-out <dir>          remember a default output folder
+  watch2text --set-key <openai-key>   remember an OpenAI key (for videos with no captions)
+  watch2text --stdout <url>           print instead of writing a file
+  watch2text --no-timestamps <url>    plain paragraphs
 
-Default output folder: --out, else $WATCH2TEXT_DIR, else ~/.watch2textrc, else the current directory.`);
+Output folder: --out, else $WATCH2TEXT_DIR, else ~/.watch2textrc, else current directory.
+Whisper needs yt-dlp installed (winget install yt-dlp) and a key via --set-key or $OPENAI_API_KEY.`);
   process.exit(code);
 }
 
@@ -42,10 +54,8 @@ async function main() {
   const args = process.argv.slice(2);
   if (!args.length || args.includes("-h") || args.includes("--help")) usage(0);
 
-  let out: string | undefined;
-  let file: string | undefined;
-  let toStdout = false;
-  let timestamps = true;
+  let out: string | undefined, file: string | undefined;
+  let toStdout = false, timestamps = true;
   const urls: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -58,12 +68,17 @@ async function main() {
       const dir = resolve(args[++i] ?? "");
       if (!dir) usage(1);
       mkdirSync(dir, { recursive: true });
-      writeFileSync(RC_PATH, JSON.stringify({ out: dir }, null, 2));
+      writeRc({ out: dir });
       console.log(`Default output folder saved: ${dir}`);
       return;
+    } else if (a === "--set-key") {
+      const key = (args[++i] ?? "").trim();
+      if (!key.startsWith("sk-")) { console.error("That doesn't look like an OpenAI key (should start with sk-)."); process.exit(1); }
+      writeRc({ openaiKey: key });
+      console.log(`OpenAI key saved to ${RC_PATH} (readable only by you).`);
+      return;
     } else if (a.startsWith("-")) {
-      console.error(`Unknown option: ${a}`);
-      usage(1);
+      console.error(`Unknown option: ${a}`); usage(1);
     } else urls.push(a);
   }
 
@@ -76,31 +91,49 @@ async function main() {
   }
   if (!urls.length) usage(1);
 
-  const outDir = resolve(out ?? process.env.WATCH2TEXT_DIR ?? readRc().out ?? process.cwd());
+  const rc = readRc();
+  const outDir = resolve(out ?? process.env.WATCH2TEXT_DIR ?? rc.out ?? process.cwd());
   if (!toStdout) mkdirSync(outDir, { recursive: true });
+  const apiKey = process.env.OPENAI_API_KEY ?? rc.openaiKey;
+
+  const emit = (md: string, filename: string, note: string) => {
+    if (toStdout) { process.stdout.write(md); return; }
+    const path = join(outDir, filename);
+    writeFileSync(path, md, "utf8");
+    console.log(`wrote ${path}  (${note})`);
+  };
 
   let failures = 0;
   for (const url of urls) {
     const id = extractVideoId(url);
-    if (!id) { console.error(`skip  ${url}  (not a YouTube URL or video ID)`); failures++; continue; }
     try {
-      const result = await fetchTranscript(id);
-      if (result.blocked) {
-        console.error(`fail  ${id}  YouTube returned an empty response (IP blocked). Try from a home connection.`);
-        failures++; continue;
+      if (id) {
+        const result = await fetchTranscript(id);
+        if (result.blocked) {
+          console.error(`fail  ${id}  YouTube returned an empty response (IP blocked). Try from a home connection.`);
+          failures++; continue;
+        }
+        if (result.captionSource === "none") {
+          if (!apiKey) {
+            console.error(`skip  ${id}  no captions. Set an OpenAI key (watch2text --set-key sk-...) to transcribe audio with Whisper.`);
+            failures++; continue;
+          }
+          const segments = await whisperSegments(id, { apiKey, ytdlpPath: rc.ytdlpPath, onStatus: (m) => console.error(`      ${id}  ${m}`) });
+          result.segments = segments;
+          result.captionSource = "whisper";
+        }
+        const md = buildMarkdown(result, { includeTimestamps: timestamps });
+        emit(md, suggestFilename(result.meta.title), `${md.split(/\s+/).length.toLocaleString()} words, ${result.captionSource}`);
+      } else if (isWebUrl(url)) {
+        const a = await fetchArticle(url);
+        const warn = a.words < 120 ? ", looks thin: may be an index page rather than an article" : "";
+        emit(a.markdown, a.filename, `${a.words.toLocaleString()} words, article${warn}`);
+      } else {
+        console.error(`skip  ${url}  (not a YouTube URL, video ID, or web address)`);
+        failures++;
       }
-      if (result.captionSource === "none") {
-        console.error(`skip  ${id}  no captions available (Whisper lane not built yet)`);
-        failures++; continue;
-      }
-      const md = buildMarkdown(result, { includeTimestamps: timestamps });
-      if (toStdout) { process.stdout.write(md); continue; }
-      const path = join(outDir, suggestFilename(result.meta.title));
-      writeFileSync(path, md, "utf8");
-      const words = md.split(/\s+/).length;
-      console.log(`wrote ${path}  (${words.toLocaleString()} words, ${result.captionSource} captions)`);
     } catch (err) {
-      console.error(`fail  ${id}  ${String(err).slice(0, 140)}`);
+      console.error(`fail  ${id ?? url}  ${String((err as Error).message ?? err).slice(0, 200)}`);
       failures++;
     }
   }

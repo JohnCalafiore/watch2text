@@ -140,13 +140,16 @@ export default function Home() {
           </label>
         </div>
         {error && <div className="error">{error}</div>}
-        {notice && (
-          <div className="notice">
-            {notice}
-            <WaitlistForm source="beta-gate" />
-          </div>
-        )}
       </form>
+
+      {/* Rendered outside the URL form: a <form> can't nest inside a <form>,
+          and a nested submit would bubble up and re-trigger transcription. */}
+      {notice && (
+        <div className="notice">
+          {notice}
+          <WaitlistForm source="beta-gate" />
+        </div>
+      )}
 
       {result && (
         <section className="result">

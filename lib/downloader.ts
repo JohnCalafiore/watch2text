@@ -176,7 +176,9 @@ async function runJob(job: DownloadJob) {
     ...(ffmpegConfigured() ? ["--ffmpeg-location", ffmpeg()] : []),
     "--embed-metadata",
     "--embed-chapters",
-    "--write-thumbnail",
+    // Thumbnail goes inside the file as cover art (shows in Explorer and players),
+    // so there's no separate .jpg next to each video.
+    "--embed-thumbnail",
     "--convert-thumbnails", "jpg",
     "-o", join(root, "%(channel,uploader|Unknown)s", "%(title).150B [%(id)s].%(ext)s"),
     "--progress-template", `download:${PROGRESS_PREFIX}%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s`,
@@ -319,6 +321,8 @@ export function listLibrary(): LibraryItem[] {
       if (!kind) continue;
       const stem = abs.slice(0, -ext.length);
       const thumb = THUMB_EXT.map((e) => stem + e).find((p) => existsSync(p));
+      // No sidecar image (the normal case now): use YouTube's thumbnail for the tile.
+      const ytId = name.match(/\[([\w-]{11})\]\.[^.]+$/)?.[1];
       const md = existsSync(stem + ".md") ? stem + ".md" : undefined;
       const toRel = (p: string) => relative(root, p).split(sep).join("/");
       items.push({
@@ -328,7 +332,7 @@ export function listLibrary(): LibraryItem[] {
         bytes: st.size,
         modified: st.mtimeMs,
         kind,
-        thumbnail: thumb ? toRel(thumb) : undefined,
+        thumbnail: thumb ? toRel(thumb) : ytId ? `https://i.ytimg.com/vi/${ytId}/mqdefault.jpg` : undefined,
         transcript: md ? toRel(md) : undefined,
       });
     }

@@ -8,5 +8,5 @@ if not exist ".next\BUILD_ID" (
 )
 echo Starting Watch2Text at http://localhost:3005 ...
 start "" "http://localhost:3005"
-call npx next start -p 3005
+call npx next start -p 3005 -H 127.0.0.1
 pause

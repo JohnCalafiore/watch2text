@@ -9,3 +9,4 @@ urls.txt
 *.log
 .DS_Store
 dist/
+tsconfig.tsbuildinfo

@@ -325,7 +325,12 @@ export default function Library() {
                     <button type="button" className="thumb" onClick={() => setPlaying(it)} aria-label={`Play ${it.name}`}>
                       {it.thumbnail ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={fileUrl(it.thumbnail)} alt="" loading="lazy" />
+                        <img
+                          src={it.thumbnail.startsWith("http") ? it.thumbnail : fileUrl(it.thumbnail)}
+                          alt=""
+                          loading="lazy"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
                       ) : (
                         <span className="noThumb">{it.kind === "audio" ? "♪" : "▶"}</span>
                       )}

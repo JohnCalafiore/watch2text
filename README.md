@@ -56,6 +56,19 @@ Uses [youtubei.js](https://github.com/LuanRT/YouTube.js) with two deliberate cho
 - `getBasicInfo` with the **ANDROID client**, because the full watch-page parser is brittle against markup changes and the WEB client returns `UNPLAYABLE` from datacenter IPs
 - The caption URL's `fmt` parameter must be **replaced** with `json3` (via `URL.searchParams.set`), not appended, or you get XML back
 
+## Download videos to watch offline (local only)
+
+Run Watch2Text on your own computer and open **http://localhost:3005/library**. Paste a YouTube video or playlist link, pick **720p**, **1080p**, or **Audio**, and the file lands in `~/Videos/Watch2Text` (changeable on the page), grouped by channel with a thumbnail. Optionally save a Markdown transcript next to each video. Play, save, or delete from the library page.
+
+One-time setup on Windows (both free):
+
+```powershell
+winget install yt-dlp
+winget install Gyan.FFmpeg
+```
+
+Video is saved as H.264 MP4 so it plays everywhere, including iPhone. If downloads start failing, update yt-dlp first: `winget upgrade yt-dlp`. This lane never runs on the hosted site, and the local server only answers to `localhost` and Tailscale (`*.ts.net`) names. Downloading from YouTube is against its Terms of Service except where YouTube offers a download button, so keep it to personal offline viewing.
+
 ## Why the hosted version is gated (videos only)
 
 YouTube serves empty responses to requests from datacenter IP ranges (Vercel, AWS, and also free proxy providers, which are datacenter IPs too). Your home connection is fine; a server is not. The app detects this (`blocked` flag) and shows an honest "private beta" message instead of a misleading "no captions" error.

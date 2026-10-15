@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface ApiResult {
   markdown: string;
@@ -83,6 +83,14 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [result, setResult] = useState<ApiResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [hasLibrary, setHasLibrary] = useState(false);
+
+  // The download library only exists when running on your own computer.
+  useEffect(() => {
+    fetch("/api/library", { method: "GET", cache: "no-store" })
+      .then((r) => setHasLibrary(r.ok))
+      .catch(() => setHasLibrary(false));
+  }, []);
 
   async function transcribe(e: React.FormEvent) {
     e.preventDefault();
@@ -153,6 +161,7 @@ export default function Home() {
             <span className="brand-name">Watch2Text</span>
           </a>
           <nav className="nav">
+            {hasLibrary && <a href="/library">Library</a>}
             <a href="#how">How it works</a>
             <a href={REPO} target="_blank" rel="noreferrer">Source</a>
             <a href="#waitlist" className="pill">Join the beta</a>

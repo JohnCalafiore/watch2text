@@ -67,6 +67,8 @@ winget install yt-dlp
 winget install Gyan.FFmpeg
 ```
 
+**Always on (Windows):** double-click `Turn on autostart.cmd` once. Watch2Text then runs silently in the background every time you sign in, and http://localhost:3005/library just works; bookmark it. `Update Watch2Text.cmd` stops, pulls, rebuilds and restarts in one go. `Turn off autostart.cmd` undoes it.
+
 Video is saved as H.264 MP4 so it plays everywhere, including iPhone. If downloads start failing, update yt-dlp first: `winget upgrade yt-dlp`. This lane never runs on the hosted site, and the local server only answers to `localhost` and Tailscale (`*.ts.net`) names. Downloading from YouTube is against its Terms of Service except where YouTube offers a download button, so keep it to personal offline viewing.
 
 ## Why the hosted version is gated (videos only)

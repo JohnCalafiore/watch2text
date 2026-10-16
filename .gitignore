@@ -10,3 +10,4 @@ urls.txt
 .DS_Store
 dist/
 tsconfig.tsbuildinfo
+watch2text.log
